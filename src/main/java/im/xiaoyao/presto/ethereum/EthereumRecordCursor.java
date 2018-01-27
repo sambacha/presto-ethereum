@@ -172,7 +172,11 @@ public class EthereumRecordCursor implements RecordCursor {
                     }
 
                     for (Log l : logs) {
-                        if (!l.getTopics().isEmpty() && l.getTopics().get(0).equalsIgnoreCase(EthereumERC20Utils.TRANSFER_EVENT_TOPIC) && l.getTopics().size() >= 3) {
+                        if (!l.getTopics().isEmpty() &&
+                                l.getTopics().get(0).equalsIgnoreCase(EthereumERC20Utils.TRANSFER_EVENT_TOPIC) &&
+                                l.getTopics().size() >= 3 &&
+                                l.getData() != null && !l.getData().isEmpty() && !l.getData().equals("0x")) {
+
                             // Token contract address
                             builder.add(() -> String.format("%s", l.getAddress()));
 
@@ -184,6 +188,7 @@ public class EthereumRecordCursor implements RecordCursor {
 
                             // amount value
                             builder.add(() -> EthereumERC20Utils.hexToDouble(l.getData()));
+
                             builder.add(transactionReceipt::getTransactionHash);
                             builder.add(transactionReceipt::getBlockNumber);
                             this.suppliers = builder.build();
