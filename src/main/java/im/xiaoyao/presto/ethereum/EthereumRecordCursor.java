@@ -172,7 +172,7 @@ public class EthereumRecordCursor implements RecordCursor {
                     }
 
                     for (Log l : logs) {
-                        if (!l.getTopics().isEmpty() && l.getTopics().get(0).equalsIgnoreCase(EthereumERC20Utils.TRANSFER_EVENT_TOPIC)) {
+                        if (!l.getTopics().isEmpty() && l.getTopics().get(0).equalsIgnoreCase(EthereumERC20Utils.TRANSFER_EVENT_TOPIC) && l.getTopics().size() >= 3) {
                             // Token contract address
                             builder.add(() -> String.format("%s", l.getAddress()));
 
