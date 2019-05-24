@@ -1,11 +1,11 @@
 package im.xiaoyao.presto.ethereum;
 
-import com.facebook.presto.spi.ConnectorHandleResolver;
-import com.facebook.presto.spi.NodeManager;
-import com.facebook.presto.spi.connector.Connector;
-import com.facebook.presto.spi.connector.ConnectorContext;
-import com.facebook.presto.spi.connector.ConnectorFactory;
-import com.facebook.presto.spi.type.TypeManager;
+import io.prestosql.spi.connector.ConnectorHandleResolver;
+import io.prestosql.spi.NodeManager;
+import io.prestosql.spi.connector.Connector;
+import io.prestosql.spi.connector.ConnectorContext;
+import io.prestosql.spi.connector.ConnectorFactory;
+import io.prestosql.spi.type.TypeManager;
 import com.google.common.base.Throwables;
 import com.google.inject.Injector;
 import io.airlift.bootstrap.Bootstrap;
