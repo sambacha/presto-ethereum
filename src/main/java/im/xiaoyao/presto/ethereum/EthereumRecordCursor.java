@@ -1,12 +1,13 @@
 package im.xiaoyao.presto.ethereum;
 
-import com.facebook.presto.spi.RecordCursor;
-import com.facebook.presto.spi.block.Block;
-import com.facebook.presto.spi.block.BlockBuilder;
-import com.facebook.presto.spi.block.BlockBuilderStatus;
-import com.facebook.presto.spi.block.InterleavedBlockBuilder;
-import com.facebook.presto.spi.type.StandardTypes;
-import com.facebook.presto.spi.type.Type;
+import io.prestosql.spi.connector.RecordCursor;
+import io.prestosql.spi.block.Block;
+import io.prestosql.spi.block.BlockBuilder;
+import io.prestosql.spi.block.BlockBuilderStatus;
+import io.prestosql.spi.block.PageBuilderStatus;
+import io.prestosql.spi.type.StandardTypes;
+import io.prestosql.spi.type.Type;
+import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import io.airlift.log.Logger;
 import io.airlift.slice.Slice;
@@ -15,9 +16,7 @@ import org.joda.time.DateTimeZone;
 import org.web3j.protocol.Web3j;
 import org.web3j.protocol.core.methods.response.EthBlock;
 import org.web3j.protocol.core.methods.response.Log;
-import org.web3j.protocol.core.methods.response.TransactionReceipt;
 
-import java.io.IOException;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.util.Collections;
@@ -29,20 +28,20 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static com.facebook.presto.spi.type.BigintType.BIGINT;
-import static com.facebook.presto.spi.type.BooleanType.BOOLEAN;
-import static com.facebook.presto.spi.type.Chars.isCharType;
-import static com.facebook.presto.spi.type.Chars.trimSpacesAndTruncateToLength;
-import static com.facebook.presto.spi.type.DateType.DATE;
-import static com.facebook.presto.spi.type.DoubleType.DOUBLE;
-import static com.facebook.presto.spi.type.IntegerType.INTEGER;
-import static com.facebook.presto.spi.type.RealType.REAL;
-import static com.facebook.presto.spi.type.SmallintType.SMALLINT;
-import static com.facebook.presto.spi.type.TimestampType.TIMESTAMP;
-import static com.facebook.presto.spi.type.TinyintType.TINYINT;
-import static com.facebook.presto.spi.type.VarbinaryType.VARBINARY;
-import static com.facebook.presto.spi.type.Varchars.isVarcharType;
-import static com.facebook.presto.spi.type.Varchars.truncateToLength;
+import static io.prestosql.spi.type.BigintType.BIGINT;
+import static io.prestosql.spi.type.BooleanType.BOOLEAN;
+import static io.prestosql.spi.type.Chars.isCharType;
+import static io.prestosql.spi.type.Chars.truncateToLengthAndTrimSpaces;
+import static io.prestosql.spi.type.DateType.DATE;
+import static io.prestosql.spi.type.DoubleType.DOUBLE;
+import static io.prestosql.spi.type.IntegerType.INTEGER;
+import static io.prestosql.spi.type.RealType.REAL;
+import static io.prestosql.spi.type.SmallintType.SMALLINT;
+import static io.prestosql.spi.type.TimestampType.TIMESTAMP;
+import static io.prestosql.spi.type.TinyintType.TINYINT;
+import static io.prestosql.spi.type.VarbinaryType.VARBINARY;
+import static io.prestosql.spi.type.Varchars.isVarcharType;
+import static io.prestosql.spi.type.Varchars.truncateToLength;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.lang.Float.floatToRawIntBits;
 import static java.util.Objects.requireNonNull;
@@ -50,9 +49,10 @@ import static java.util.Objects.requireNonNull;
 public class EthereumRecordCursor implements RecordCursor {
     private static final Logger log = Logger.get(EthereumRecordCursor.class);
 
-    private final EthBlock block;
-    private final Iterator<EthBlock> blockIter;
+    private final EthBlock.Block block;
+    private final Iterator<EthBlock.Block> blockIter;
     private final Iterator<EthBlock.TransactionResult> txIter;
+    private final Iterator<Log> logIter;
 
     private final EthereumTable table;
     private final Web3j web3j;
@@ -62,7 +62,7 @@ public class EthereumRecordCursor implements RecordCursor {
 
     private List<Supplier> suppliers;
 
-    public EthereumRecordCursor(List<EthereumColumnHandle> columnHandles, EthBlock block, EthereumTable table, Web3j web3j) {
+    public EthereumRecordCursor(List<EthereumColumnHandle> columnHandles, EthBlock.Block block, EthereumTable table) {
         this.columnHandles = columnHandles;
         this.table = table;
         this.web3j = web3j;
@@ -77,17 +77,17 @@ public class EthereumRecordCursor implements RecordCursor {
         // TODO: handle failure upstream
         this.block = requireNonNull(block, "block is null");
         this.blockIter = ImmutableList.of(block).iterator();
-        this.txIter = block.getBlock().getTransactions().iterator();
+        this.txIter = block.getTransactions().iterator();
     }
 
     @Override
     public long getTotalBytes() {
-        return block.getBlock().getSize().longValue();
+        return block.getSize().longValue();
     }
 
     @Override
     public long getCompletedBytes() {
-        return block.getBlock().getSize().longValue();
+        return block.getSize().longValue();
     }
 
     @Override
@@ -105,37 +105,36 @@ public class EthereumRecordCursor implements RecordCursor {
     public boolean advanceNextPosition() {
         if (table == EthereumTable.BLOCK && !blockIter.hasNext()
                 || table == EthereumTable.TRANSACTION && !txIter.hasNext()
-                || table == EthereumTable.ERC20 && !txIter.hasNext()) {
+                || table == EthereumTable.ERC20 && !logIter.hasNext()) {
             return false;
         }
 
         ImmutableList.Builder<Supplier> builder = ImmutableList.builder();
         if (table == EthereumTable.BLOCK) {
             blockIter.next();
-            EthBlock.Block blockBlock = this.block.getBlock();
-            builder.add(blockBlock::getNumber);
-            builder.add(blockBlock::getHash);
-            builder.add(blockBlock::getParentHash);
-            builder.add(blockBlock::getNonceRaw);
-            builder.add(blockBlock::getSha3Uncles);
-            builder.add(blockBlock::getLogsBloom);
-            builder.add(blockBlock::getTransactionsRoot);
-            builder.add(blockBlock::getStateRoot);
-            builder.add(blockBlock::getMiner);
-            builder.add(blockBlock::getDifficulty);
-            builder.add(blockBlock::getTotalDifficulty);
-            builder.add(blockBlock::getSize);
-            builder.add(blockBlock::getExtraData);
-            builder.add(blockBlock::getGasLimit);
-            builder.add(blockBlock::getGasUsed);
-            builder.add(blockBlock::getTimestamp);
+            builder.add(this.block::getNumber);
+            builder.add(this.block::getHash);
+            builder.add(this.block::getParentHash);
+            builder.add(this.block::getNonceRaw);
+            builder.add(this.block::getSha3Uncles);
+            builder.add(this.block::getLogsBloom);
+            builder.add(this.block::getTransactionsRoot);
+            builder.add(this.block::getStateRoot);
+            builder.add(this.block::getMiner);
+            builder.add(this.block::getDifficulty);
+            builder.add(this.block::getTotalDifficulty);
+            builder.add(this.block::getSize);
+            builder.add(this.block::getExtraData);
+            builder.add(this.block::getGasLimit);
+            builder.add(this.block::getGasUsed);
+            builder.add(this.block::getTimestamp);
             builder.add(() -> {
-                return blockBlock.getTransactions()
+                return this.block.getTransactions()
                         .stream()
                         .map(tr -> ((EthBlock.TransactionObject) tr.get()).getHash())
                         .collect(Collectors.toList());
             });
-            builder.add(blockBlock::getUncles);
+            builder.add(this.block::getUncles);
 
         } else if (table == EthereumTable.TRANSACTION) {
             EthBlock.TransactionResult tr = txIter.next();
@@ -153,18 +152,22 @@ public class EthereumRecordCursor implements RecordCursor {
             builder.add(tx::getGasPrice);
             builder.add(tx::getInput);
         } else if (table == EthereumTable.ERC20) {
-            while (txIter.hasNext()) {  //TODO: separate ERC20 iterator
-                EthBlock.TransactionResult tr = txIter.next();
-                EthBlock.TransactionObject tx = (EthBlock.TransactionObject) tr.get();
+            while (logIter.hasNext()) {
+                Log l = logIter.next();
+                List<String> topics = l.getTopics();
+                String data = l.getData();
 
-                try {
-                    Optional<TransactionReceipt> transactionReceiptOptional = web3j.ethGetTransactionReceipt(tx.getHash()).send().getTransactionReceipt()
-                            .filter(receipt -> receipt.getLogs() != null && !receipt.getLogs().isEmpty());
-
-                    if (!transactionReceiptOptional.isPresent()) {
+                if (topics.get(0).equalsIgnoreCase(EthereumERC20Utils.TRANSFER_EVENT_TOPIC)) {
+                    // Handle unindexed event fields:
+                    // if the number of topics and fields in data part != 4, then it's a weird event
+                    if (topics.size() < 3 && topics.size() + (data.length() - 2) / 64 != 4) {
                         continue;
                     }
 
+                    if (topics.size() < 3) {
+                        Iterator<String> dataFields = Splitter.fixedLength(64).split(data.substring(2)).iterator();
+                        while (topics.size() < 3) {
+                            topics.add("0x" + dataFields.next());
                     TransactionReceipt transactionReceipt = transactionReceiptOptional.get();
                     List<Log> logs = transactionReceipt.getLogs();
                     if (logs == null || logs.isEmpty()) {
@@ -194,11 +197,26 @@ public class EthereumRecordCursor implements RecordCursor {
                             this.suppliers = builder.build();
                             return true;
                         }
+                        data = "0x" + dataFields.next();
                     }
-                } catch (IOException e) {
-                    throw new IllegalStateException("Unable to get transactionReceipt");
+
+                    // Token contract address
+                    builder.add(() -> Optional.ofNullable(EthereumERC20Token.lookup.get(l.getAddress().toLowerCase()))
+                            .map(Enum::name).orElse(String.format("ERC20(%s)", l.getAddress())));
+                    // from address
+                    builder.add(() -> h32ToH20(topics.get(1)));
+                    // to address
+                    builder.add(() -> h32ToH20(topics.get(2)));
+                    // amount value
+                    String finalData = data;
+                    builder.add(() -> EthereumERC20Utils.hexToDouble(finalData));
+                    builder.add(l::getTransactionHash);
+                    builder.add(l::getBlockNumber);
+                    this.suppliers = builder.build();
+                    return true;
                 }
             }
+
             return false;
         } else {
             return false;
@@ -225,6 +243,7 @@ public class EthereumRecordCursor implements RecordCursor {
 
     @Override
     public Slice getSlice(int field) {
+        log.info("%d, %d, %s", field, fieldToColumnIndex[field], suppliers.get(fieldToColumnIndex[field]).get().toString());
         return Slices.utf8Slice((String) suppliers.get(fieldToColumnIndex[field]).get());
     }
 
@@ -277,7 +296,7 @@ public class EthereumRecordCursor implements RecordCursor {
             sliceValue = truncateToLength(sliceValue, type);
         }
         if (isCharType(type)) {
-            sliceValue = trimSpacesAndTruncateToLength(sliceValue, type);
+            sliceValue = truncateToLengthAndTrimSpaces(sliceValue, type);
         }
 
         return sliceValue;
@@ -339,13 +358,13 @@ public class EthereumRecordCursor implements RecordCursor {
         checkArgument(typeParameters.size() == 2, "map must have exactly 2 type parameter");
         Type keyType = typeParameters.get(0);
         Type valueType = typeParameters.get(1);
+        boolean builderSynthesized = false;
 
-        BlockBuilder currentBuilder;
-        if (builder != null) {
-            currentBuilder = builder.beginBlockEntry();
-        } else {
-            currentBuilder = new InterleavedBlockBuilder(typeParameters, new BlockBuilderStatus(), map.size());
+        if (builder == null) {
+            builderSynthesized = true;
+            builder = type.createBlockBuilder(new BlockBuilderStatus(), 1);
         }
+        BlockBuilder currentBuilder = builder.beginBlockEntry();
 
         for (Map.Entry<?, ?> entry : map.entrySet()) {
             // Hive skips map entries with null keys
@@ -355,12 +374,11 @@ public class EthereumRecordCursor implements RecordCursor {
             }
         }
 
-        if (builder != null) {
-            builder.closeEntry();
-            return null;
+        builder.closeEntry();
+        if (builderSynthesized) {
+            return (Block) type.getObject(builder, 0);
         } else {
-            Block resultBlock = currentBuilder.build();
-            return resultBlock;
+            return null;
         }
     }
 
@@ -372,12 +390,12 @@ public class EthereumRecordCursor implements RecordCursor {
 
         List<Type> typeParameters = type.getTypeParameters();
         EthBlock.TransactionObject structData = (EthBlock.TransactionObject) object;
-        BlockBuilder currentBuilder;
-        if (builder != null) {
-            currentBuilder = builder.beginBlockEntry();
-        } else {
-            currentBuilder = new InterleavedBlockBuilder(typeParameters, new BlockBuilderStatus(), typeParameters.size());
+        boolean builderSynthesized = false;
+        if (builder == null) {
+            builderSynthesized = true;
+            builder = type.createBlockBuilder(new BlockBuilderStatus(), 1);
         }
+        BlockBuilder currentBuilder = builder.beginBlockEntry();
 
         ImmutableList.Builder<Supplier> lstBuilder = ImmutableList.builder();
         lstBuilder.add(structData::getHash);
@@ -397,12 +415,11 @@ public class EthereumRecordCursor implements RecordCursor {
             serializeObject(typeParameters.get(i), currentBuilder, txColumns.get(i).get());
         }
 
-        if (builder != null) {
-            builder.closeEntry();
-            return null;
+        builder.closeEntry();
+        if (builderSynthesized) {
+            return (Block) type.getObject(builder, 0);
         } else {
-            Block resultBlock = currentBuilder.build();
-            return resultBlock;
+            return null;
         }
     }
 

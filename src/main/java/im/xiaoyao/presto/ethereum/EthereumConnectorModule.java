@@ -1,7 +1,7 @@
 package im.xiaoyao.presto.ethereum;
 
-import com.facebook.presto.spi.type.Type;
-import com.facebook.presto.spi.type.TypeManager;
+import io.prestosql.spi.type.Type;
+import io.prestosql.spi.type.TypeManager;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.deser.std.FromStringDeserializer;
 import com.google.inject.Binder;
@@ -10,7 +10,7 @@ import com.google.inject.Scopes;
 
 import javax.inject.Inject;
 
-import static com.facebook.presto.spi.type.TypeSignature.parseTypeSignature;
+import static io.prestosql.spi.type.TypeSignature.parseTypeSignature;
 import static com.google.common.base.Preconditions.checkArgument;
 import static io.airlift.configuration.ConfigBinder.configBinder;
 import static io.airlift.json.JsonBinder.jsonBinder;
@@ -22,7 +22,7 @@ public class EthereumConnectorModule implements Module {
         binder.bind(EthereumConnector.class).in(Scopes.SINGLETON);
         binder.bind(EthereumMetadata.class).in(Scopes.SINGLETON);
         binder.bind(EthereumWeb3jProvider.class).in(Scopes.SINGLETON);
-
+        binder.bind(EthereumSplitSourceManager.class).in(Scopes.SINGLETON);
         binder.bind(EthereumSplitManager.class).in(Scopes.SINGLETON);
         binder.bind(EthereumRecordSetProvider.class).in(Scopes.SINGLETON);
 

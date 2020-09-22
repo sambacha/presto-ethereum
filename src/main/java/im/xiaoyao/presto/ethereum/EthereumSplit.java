@@ -1,7 +1,8 @@
 package im.xiaoyao.presto.ethereum;
 
-import com.facebook.presto.spi.ConnectorSplit;
-import com.facebook.presto.spi.HostAddress;
+import io.prestosql.spi.connector.ConnectorSplit;
+import io.prestosql.spi.HostAddress;
+// import io.prestosql.spi;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 

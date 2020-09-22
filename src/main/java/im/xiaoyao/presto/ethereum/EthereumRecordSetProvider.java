@@ -1,11 +1,11 @@
 package im.xiaoyao.presto.ethereum;
 
-import com.facebook.presto.spi.ColumnHandle;
-import com.facebook.presto.spi.ConnectorSession;
-import com.facebook.presto.spi.ConnectorSplit;
-import com.facebook.presto.spi.RecordSet;
-import com.facebook.presto.spi.connector.ConnectorRecordSetProvider;
-import com.facebook.presto.spi.connector.ConnectorTransactionHandle;
+import io.prestosql.spi.connector.ColumnHandle;
+import io.prestosql.spi.connector.ConnectorSession;
+import io.prestosql.spi.connector.ConnectorSplit;
+import io.prestosql.spi.connector.RecordSet;
+import io.prestosql.spi.connector.ConnectorRecordSetProvider;
+import io.prestosql.spi.connector.ConnectorTransactionHandle;
 import com.google.common.collect.ImmutableList;
 import org.web3j.protocol.Web3j;
 
@@ -18,10 +18,12 @@ import static im.xiaoyao.presto.ethereum.EthereumHandleResolver.convertSplit;
 
 public class EthereumRecordSetProvider implements ConnectorRecordSetProvider {
     private final Web3j web3j;
+    private final CachedWeb3j cachedWeb3j;
 
     @Inject
     public EthereumRecordSetProvider(EthereumWeb3jProvider web3jProvider) {
         this.web3j = web3jProvider.getWeb3j();
+        this.cachedWeb3j = web3jProvider.getCachedWeb3j();
     }
 
     @Override
@@ -40,6 +42,6 @@ public class EthereumRecordSetProvider implements ConnectorRecordSetProvider {
             handleBuilder.add(columnHandle);
         }
 
-        return new EthereumRecordSet(web3j, handleBuilder.build(), ethereumSplit);
+        return new EthereumRecordSet(web3j, cachedWeb3j, handleBuilder.build(), ethereumSplit);
     }
 }

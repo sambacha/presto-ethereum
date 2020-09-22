@@ -1,7 +1,7 @@
 package im.xiaoyao.presto.ethereum;
 
-import com.facebook.presto.spi.Plugin;
-import com.facebook.presto.spi.connector.ConnectorFactory;
+import io.prestosql.spi.Plugin;
+import io.prestosql.spi.connector.ConnectorFactory;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import im.xiaoyao.presto.ethereum.udfs.EthereumUDFs;

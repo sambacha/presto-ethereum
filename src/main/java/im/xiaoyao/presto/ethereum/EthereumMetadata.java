@@ -1,36 +1,33 @@
 package im.xiaoyao.presto.ethereum;
 
-import com.facebook.presto.spi.ColumnHandle;
-import com.facebook.presto.spi.ColumnMetadata;
-import com.facebook.presto.spi.ConnectorSession;
-import com.facebook.presto.spi.ConnectorTableHandle;
-import com.facebook.presto.spi.ConnectorTableLayout;
-import com.facebook.presto.spi.ConnectorTableLayoutHandle;
-import com.facebook.presto.spi.ConnectorTableLayoutResult;
-import com.facebook.presto.spi.ConnectorTableMetadata;
-import com.facebook.presto.spi.Constraint;
-import com.facebook.presto.spi.SchemaTableName;
-import com.facebook.presto.spi.SchemaTablePrefix;
-import com.facebook.presto.spi.connector.ConnectorMetadata;
-import com.facebook.presto.spi.predicate.Domain;
-import com.facebook.presto.spi.predicate.Marker;
-import com.facebook.presto.spi.predicate.Range;
-import com.facebook.presto.spi.type.ArrayType;
-import com.facebook.presto.spi.type.BigintType;
-import com.facebook.presto.spi.type.DoubleType;
-import com.facebook.presto.spi.type.IntegerType;
-import com.facebook.presto.spi.type.VarcharType;
+import io.prestosql.spi.connector.ColumnHandle;
+import io.prestosql.spi.connector.ColumnMetadata;
+import io.prestosql.spi.connector.ConnectorSession;
+import io.prestosql.spi.connector.ConnectorTableHandle;
+import io.prestosql.spi.connector.ConnectorTableLayout;
+import io.prestosql.spi.connector.ConnectorTableLayoutHandle;
+import io.prestosql.spi.connector.ConnectorTableLayoutResult;
+import io.prestosql.spi.connector.ConnectorTableMetadata;
+import io.prestosql.spi.connector.Constraint;
+import io.prestosql.spi.connector.SchemaTableName;
+import io.prestosql.spi.connector.SchemaTablePrefix;
+import io.prestosql.spi.connector.ConnectorMetadata;
+import io.prestosql.spi.predicate.Domain;
+import io.prestosql.spi.predicate.Marker;
+import io.prestosql.spi.predicate.Range;
+import io.prestosql.spi.type.ArrayType;
+import io.prestosql.spi.type.BigintType;
+import io.prestosql.spi.type.DoubleType;
+import io.prestosql.spi.type.IntegerType;
+import io.prestosql.spi.type.VarcharType;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.airlift.log.Logger;
 import io.airlift.slice.Slice;
 import org.web3j.protocol.Web3j;
-import org.web3j.protocol.core.DefaultBlockParameter;
 
 import javax.inject.Inject;
-
 import java.io.IOException;
-import java.math.BigInteger;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -52,14 +49,19 @@ public class EthereumMetadata implements ConnectorMetadata {
 
     private final String connectorId;
     private final Web3j web3j;
+    private final CachedWeb3j cachedWeb3j;
+    private final EthereumSplitSourceManager ssMgr;
 
     @Inject
     public EthereumMetadata(
             EthereumConnectorId connectorId,
-            EthereumWeb3jProvider provider
+            EthereumWeb3jProvider provider,
+            EthereumSplitSourceManager ssMgr
     ) {
         this.connectorId = requireNonNull(connectorId, "connectorId is null").toString();
         this.web3j = requireNonNull(provider, "provider is null").getWeb3j();
+        this.cachedWeb3j = requireNonNull(provider, "provider is null").getCachedWeb3j();
+        this.ssMgr = requireNonNull(ssMgr, "ssMgr is null");
     }
 
     @Override
@@ -179,7 +181,7 @@ public class EthereumMetadata implements ConnectorMetadata {
     public List<ConnectorTableLayoutResult> getTableLayouts(
             ConnectorSession session,
             ConnectorTableHandle table,
-            Constraint<ColumnHandle> constraint,
+            Constraint constraint,
             Optional<Set<ColumnHandle>> desiredColumns
     ) {
         ImmutableList.Builder<EthereumBlockRange> builder = ImmutableList.builder();
@@ -304,7 +306,7 @@ public class EthereumMetadata implements ConnectorMetadata {
 
         while(low <= high) {
             middle = low + (high - low) / 2;
-            long ts = web3j.ethGetBlockByNumber(DefaultBlockParameter.valueOf(BigInteger.valueOf(middle)), false).send().getBlock().getTimestamp().longValue();
+            long ts = cachedWeb3j.ethGetBlockByNumber(middle).getTimestamp().longValue();
 
             if (ts < timestamp) {
                 low = middle + 1;
@@ -315,5 +317,16 @@ public class EthereumMetadata implements ConnectorMetadata {
             }
         }
         return middle + offset;
+    }
+
+    @Override
+    public void beginQuery(ConnectorSession session) {
+        log.info("========= Begin Query %s", session.getQueryId());
+    }
+
+    @Override
+    public void cleanupQuery(ConnectorSession session) {
+        log.info("========= End Query %s", session.getQueryId());
+        ssMgr.removeSource(session.getQueryId());
     }
 }
