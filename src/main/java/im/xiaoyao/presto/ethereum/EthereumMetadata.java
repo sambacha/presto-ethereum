@@ -1,25 +1,25 @@
 package im.xiaoyao.presto.ethereum;
 
-import com.facebook.presto.spi.ColumnHandle;
-import com.facebook.presto.spi.ColumnMetadata;
-import com.facebook.presto.spi.ConnectorSession;
-import com.facebook.presto.spi.ConnectorTableHandle;
-import com.facebook.presto.spi.ConnectorTableLayout;
-import com.facebook.presto.spi.ConnectorTableLayoutHandle;
-import com.facebook.presto.spi.ConnectorTableLayoutResult;
-import com.facebook.presto.spi.ConnectorTableMetadata;
-import com.facebook.presto.spi.Constraint;
-import com.facebook.presto.spi.SchemaTableName;
-import com.facebook.presto.spi.SchemaTablePrefix;
-import com.facebook.presto.spi.connector.ConnectorMetadata;
-import com.facebook.presto.spi.predicate.Domain;
-import com.facebook.presto.spi.predicate.Marker;
-import com.facebook.presto.spi.predicate.Range;
-import com.facebook.presto.spi.type.ArrayType;
-import com.facebook.presto.spi.type.BigintType;
-import com.facebook.presto.spi.type.DoubleType;
-import com.facebook.presto.spi.type.IntegerType;
-import com.facebook.presto.spi.type.VarcharType;
+import io.prestosql.spi.connector.ColumnHandle;
+import io.prestosql.spi.connector.ColumnMetadata;
+import io.prestosql.spi.connector.ConnectorSession;
+import io.prestosql.spi.connector.ConnectorTableHandle;
+import io.prestosql.spi.connector.ConnectorTableLayout;
+import io.prestosql.spi.connector.ConnectorTableLayoutHandle;
+import io.prestosql.spi.connector.ConnectorTableLayoutResult;
+import io.prestosql.spi.connector.ConnectorTableMetadata;
+import io.prestosql.spi.connector.Constraint;
+import io.prestosql.spi.connector.SchemaTableName;
+import io.prestosql.spi.connector.SchemaTablePrefix;
+import io.prestosql.spi.connector.ConnectorMetadata;
+import io.prestosql.spi.predicate.Domain;
+import io.prestosql.spi.predicate.Marker;
+import io.prestosql.spi.predicate.Range;
+import io.prestosql.spi.type.ArrayType;
+import io.prestosql.spi.type.BigintType;
+import io.prestosql.spi.type.DoubleType;
+import io.prestosql.spi.type.IntegerType;
+import io.prestosql.spi.type.VarcharType;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.airlift.log.Logger;
@@ -42,10 +42,10 @@ public class EthereumMetadata implements ConnectorMetadata {
     private static final Logger log = Logger.get(EthereumMetadata.class);
 
     private static final String DEFAULT_SCHEMA = "default";
-    private static final int H8_BYTE_HASH_STRING_LENGTH = 2 + 8 * 2;
-    private static final int H32_BYTE_HASH_STRING_LENGTH = 2 + 32 * 2;
-    private static final int H256_BYTE_HASH_STRING_LENGTH = 2 + 256 * 2;
-    private static final int H20_BYTE_HASH_STRING_LENGTH = 2 + 20 * 2;
+    public static final int H8_BYTE_HASH_STRING_LENGTH = 2 + 8 * 2;
+    public static final int H32_BYTE_HASH_STRING_LENGTH = 2 + 32 * 2;
+    public static final int H256_BYTE_HASH_STRING_LENGTH = 2 + 256 * 2;
+    public static final int H20_BYTE_HASH_STRING_LENGTH = 2 + 20 * 2;
 
     private final String connectorId;
     private final Web3j web3j;
@@ -75,6 +75,8 @@ public class EthereumMetadata implements ConnectorMetadata {
             return new EthereumTableHandle(connectorId, DEFAULT_SCHEMA, EthereumTable.BLOCK.getName());
         } else if (EthereumTable.TRANSACTION.getName().equals(schemaTableName.getTableName())) {
             return new EthereumTableHandle(connectorId, DEFAULT_SCHEMA, EthereumTable.TRANSACTION.getName());
+        } else if (EthereumTable.ERC20.getName().equals(schemaTableName.getTableName())) {
+            return new EthereumTableHandle(connectorId, DEFAULT_SCHEMA, EthereumTable.ERC20.getName());
         } else {
             throw new IllegalArgumentException("Unknown Table Name " + schemaTableName.getTableName());
         }
@@ -89,7 +91,8 @@ public class EthereumMetadata implements ConnectorMetadata {
     public List<SchemaTableName> listTables(ConnectorSession session, String schemaNameOrNull)
     {
         return ImmutableList.of(new SchemaTableName(DEFAULT_SCHEMA, EthereumTable.BLOCK.getName()),
-                new SchemaTableName(DEFAULT_SCHEMA, EthereumTable.TRANSACTION.getName()));
+                new SchemaTableName(DEFAULT_SCHEMA, EthereumTable.TRANSACTION.getName()),
+                new SchemaTableName(DEFAULT_SCHEMA, EthereumTable.ERC20.getName()));
     }
 
     @SuppressWarnings("ValueOfIncrementOrDecrementUsed")
@@ -131,6 +134,13 @@ public class EthereumMetadata implements ConnectorMetadata {
             columnHandles.put("tx_gas", new EthereumColumnHandle(connectorId, index++, "tx_gas", DoubleType.DOUBLE));
             columnHandles.put("tx_gasPrice", new EthereumColumnHandle(connectorId, index++, "tx_gasPrice", DoubleType.DOUBLE));
             columnHandles.put("tx_input", new EthereumColumnHandle(connectorId, index++, "tx_input", VarcharType.VARCHAR));
+        } else if (EthereumTable.ERC20.getName().equals(tableName)) {
+            columnHandles.put("erc20_token", new EthereumColumnHandle(connectorId, index++, "erc20_token", VarcharType.createUnboundedVarcharType()));
+            columnHandles.put("erc20_from", new EthereumColumnHandle(connectorId, index++, "erc20_from", VarcharType.createVarcharType(H20_BYTE_HASH_STRING_LENGTH)));
+            columnHandles.put("erc20_to", new EthereumColumnHandle(connectorId, index++, "erc20_to", VarcharType.createVarcharType(H20_BYTE_HASH_STRING_LENGTH)));
+            columnHandles.put("erc20_value", new EthereumColumnHandle(connectorId, index++, "erc20_value", DoubleType.DOUBLE));
+            columnHandles.put("erc20_txHash", new EthereumColumnHandle(connectorId, index++, "erc20_txHash", VarcharType.createVarcharType(H32_BYTE_HASH_STRING_LENGTH)));
+            columnHandles.put("erc20_blockNumber", new EthereumColumnHandle(connectorId, index++, "erc20_blockNumber", BigintType.BIGINT));
         } else {
             throw new IllegalArgumentException("Unknown Table Name " + tableName);
         }
@@ -171,7 +181,7 @@ public class EthereumMetadata implements ConnectorMetadata {
     public List<ConnectorTableLayoutResult> getTableLayouts(
             ConnectorSession session,
             ConnectorTableHandle table,
-            Constraint<ColumnHandle> constraint,
+            Constraint constraint,
             Optional<Set<ColumnHandle>> desiredColumns
     ) {
         ImmutableList.Builder<EthereumBlockRange> builder = ImmutableList.builder();
@@ -182,7 +192,8 @@ public class EthereumMetadata implements ConnectorMetadata {
             for (Map.Entry<ColumnHandle, Domain> entry : columnHandleDomainMap.entrySet()) {
                 if (entry.getKey() instanceof EthereumColumnHandle
                         && (((EthereumColumnHandle) entry.getKey()).getName().equals("block_number")
-                        || ((EthereumColumnHandle) entry.getKey()).getName().equals("tx_blockNumber"))) {
+                        || ((EthereumColumnHandle) entry.getKey()).getName().equals("tx_blockNumber")
+                        || ((EthereumColumnHandle) entry.getKey()).getName().equals("erc20_blockNumber"))) {
                     entry.getValue().getValues().getRanges().getOrderedRanges().forEach(r -> {
                         Marker low = r.getLow();
                         Marker high = r.getHigh();
@@ -267,6 +278,13 @@ public class EthereumMetadata implements ConnectorMetadata {
             builder.add(new ColumnMetadata("tx_gas", DoubleType.DOUBLE));
             builder.add(new ColumnMetadata("tx_gasPrice", DoubleType.DOUBLE));
             builder.add(new ColumnMetadata("tx_input", VarcharType.VARCHAR));
+        } else if (EthereumTable.ERC20.getName().equals(schemaTableName.getTableName())) {
+            builder.add(new ColumnMetadata("erc20_token", VarcharType.createUnboundedVarcharType()));
+            builder.add(new ColumnMetadata("erc20_from", VarcharType.createVarcharType(H20_BYTE_HASH_STRING_LENGTH)));
+            builder.add(new ColumnMetadata("erc20_to", VarcharType.createVarcharType(H20_BYTE_HASH_STRING_LENGTH)));
+            builder.add(new ColumnMetadata("erc20_value", DoubleType.DOUBLE));
+            builder.add(new ColumnMetadata("erc20_txHash", VarcharType.createVarcharType(H32_BYTE_HASH_STRING_LENGTH)));
+            builder.add(new ColumnMetadata("erc20_blockNumber", BigintType.BIGINT));
         } else {
             throw new IllegalArgumentException("Unknown Table Name " + schemaTableName.getTableName());
         }

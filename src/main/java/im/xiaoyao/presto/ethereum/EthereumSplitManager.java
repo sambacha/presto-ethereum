@@ -1,11 +1,21 @@
 package im.xiaoyao.presto.ethereum;
 
+<<<<<<< HEAD
 import com.facebook.presto.spi.ConnectorSession;
 import com.facebook.presto.spi.ConnectorSplit;
 import com.facebook.presto.spi.ConnectorSplitSource;
 import com.facebook.presto.spi.ConnectorTableLayoutHandle;
 import com.facebook.presto.spi.connector.ConnectorSplitManager;
 import com.facebook.presto.spi.connector.ConnectorTransactionHandle;
+=======
+import io.prestosql.spi.connector.ConnectorSession;
+import io.prestosql.spi.connector.ConnectorSplit;
+import io.prestosql.spi.connector.ConnectorSplitSource;
+import io.prestosql.spi.connector.ConnectorTableLayoutHandle;
+import io.prestosql.spi.connector.FixedSplitSource;
+import io.prestosql.spi.connector.ConnectorSplitManager;
+import io.prestosql.spi.connector.ConnectorTransactionHandle;
+>>>>>>> 188b23f9966f47aaf0b13155937da6e6d47641ef
 import com.google.common.collect.ImmutableList;
 import io.airlift.log.Logger;
 import org.web3j.protocol.Web3j;
@@ -42,7 +52,8 @@ public class EthereumSplitManager implements ConnectorSplitManager {
     public ConnectorSplitSource getSplits(
             ConnectorTransactionHandle transaction,
             ConnectorSession session,
-            ConnectorTableLayoutHandle layout
+            ConnectorTableLayoutHandle layout,
+            SplitSchedulingStrategy splitSchedulingStrategy
     ) {
         EthereumTableLayoutHandle tableLayoutHandle = convertLayout(layout);
         EthereumTableHandle tableHandle = tableLayoutHandle.getTable();

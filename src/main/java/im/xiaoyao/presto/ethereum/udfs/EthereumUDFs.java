@@ -1,9 +1,9 @@
 package im.xiaoyao.presto.ethereum.udfs;
 
-import com.facebook.presto.spi.function.Description;
-import com.facebook.presto.spi.function.ScalarFunction;
-import com.facebook.presto.spi.function.SqlType;
-import com.facebook.presto.spi.type.StandardTypes;
+import io.prestosql.spi.function.Description;
+import io.prestosql.spi.function.ScalarFunction;
+import io.prestosql.spi.function.SqlType;
+import io.prestosql.spi.type.StandardTypes;
 import im.xiaoyao.presto.ethereum.EthereumConnectorConfig;
 import io.airlift.configuration.ConfigurationLoader;
 import io.airlift.log.Logger;
@@ -25,6 +25,7 @@ public class EthereumUDFs {
     private static final String IPC_KEY = "ethereum.ipc";
     private static final String INFURA_KEY = "ethereum.infura";
     private static final String LATEST = "latest";
+    private static final String ZERO_X = "0x";
     private static final Web3j web3j;
 
     // A hack, which I don't like
@@ -129,5 +130,12 @@ public class EthereumUDFs {
         String unitStr = unit.toStringUtf8().toUpperCase();
         EthereumUnit u = EthereumUnit.valueOf(unitStr);
         return u.toWei(num);
+    }
+
+    @ScalarFunction("isContract")
+    @Description("isContract")
+    @SqlType(StandardTypes.BOOLEAN)
+    public static boolean isContract(@SqlType(StandardTypes.VARCHAR) Slice address) throws IOException {
+        return !web3j.ethGetCode(address.toStringUtf8(), DefaultBlockParameter.valueOf(LATEST)).send().getCode().equals(ZERO_X);
     }
 }

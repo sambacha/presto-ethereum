@@ -1,6 +1,6 @@
 package im.xiaoyao.presto.ethereum;
 
-import com.facebook.presto.spi.predicate.Marker;
+import io.prestosql.spi.predicate.Marker;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.ToString;
@@ -33,7 +33,7 @@ public class EthereumBlockRange {
             throw new IllegalArgumentException("High bound cannot be ABOVE");
         }
 
-        if (startBlock > endBlock) {
+        if (startBlock > endBlock && endBlock != -1L) {
             throw new IllegalArgumentException("Low bound is greater than high bound");
         }
 
