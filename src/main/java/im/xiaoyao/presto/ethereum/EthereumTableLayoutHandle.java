@@ -1,6 +1,6 @@
 package im.xiaoyao.presto.ethereum;
 
-import com.facebook.presto.spi.ConnectorTableLayoutHandle;
+import io.prestosql.spi.connector.ConnectorTableLayoutHandle;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.ToString;
