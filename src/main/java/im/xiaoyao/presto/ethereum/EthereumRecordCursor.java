@@ -49,13 +49,8 @@ import static java.util.Objects.requireNonNull;
 public class EthereumRecordCursor implements RecordCursor {
     private static final Logger log = Logger.get(EthereumRecordCursor.class);
 
-<<<<<<< HEAD
     private final EthBlock.Block block;
     private final Iterator<EthBlock.Block> blockIter;
-=======
-    private final EthBlock block;
-    private final Iterator<EthBlock> blockIter;
->>>>>>> 188b23f9966f47aaf0b13155937da6e6d47641ef
     private final Iterator<EthBlock.TransactionResult> txIter;
     private final Iterator<Log> logIter;
 
@@ -67,11 +62,7 @@ public class EthereumRecordCursor implements RecordCursor {
 
     private List<Supplier> suppliers;
 
-<<<<<<< HEAD
     public EthereumRecordCursor(List<EthereumColumnHandle> columnHandles, EthBlock.Block block, EthereumTable table) {
-=======
-    public EthereumRecordCursor(List<EthereumColumnHandle> columnHandles, EthBlock block, EthereumTable table, Web3j web3j) {
->>>>>>> 188b23f9966f47aaf0b13155937da6e6d47641ef
         this.columnHandles = columnHandles;
         this.table = table;
         this.web3j = web3j;
@@ -86,17 +77,12 @@ public class EthereumRecordCursor implements RecordCursor {
         // TODO: handle failure upstream
         this.block = requireNonNull(block, "block is null");
         this.blockIter = ImmutableList.of(block).iterator();
-<<<<<<< HEAD
         this.txIter = block.getTransactions().iterator();
     }
 
     @Override
     public long getTotalBytes() {
         return block.getSize().longValue();
-=======
-        this.txIter = block.getBlock().getTransactions().iterator();
-        this.logIter = new EthereumLogLazyIterator(block, web3j);
->>>>>>> 188b23f9966f47aaf0b13155937da6e6d47641ef
     }
 
     @Override
@@ -182,6 +168,34 @@ public class EthereumRecordCursor implements RecordCursor {
                         Iterator<String> dataFields = Splitter.fixedLength(64).split(data.substring(2)).iterator();
                         while (topics.size() < 3) {
                             topics.add("0x" + dataFields.next());
+                    TransactionReceipt transactionReceipt = transactionReceiptOptional.get();
+                    List<Log> logs = transactionReceipt.getLogs();
+                    if (logs == null || logs.isEmpty()) {
+                        continue;
+                    }
+
+                    for (Log l : logs) {
+                        if (!l.getTopics().isEmpty() &&
+                                l.getTopics().get(0).equalsIgnoreCase(EthereumERC20Utils.TRANSFER_EVENT_TOPIC) &&
+                                l.getTopics().size() >= 3 &&
+                                l.getData() != null && !l.getData().isEmpty() && !l.getData().equals("0x")) {
+
+                            // Token contract address
+                            builder.add(() -> String.format("%s", l.getAddress()));
+
+                            // from address
+                            builder.add(() -> h32ToH20(l.getTopics().get(1)));
+
+                            // to address
+                            builder.add(() -> h32ToH20(l.getTopics().get(2)));
+
+                            // amount value
+                            builder.add(() -> EthereumERC20Utils.hexToDouble(l.getData()));
+
+                            builder.add(transactionReceipt::getTransactionHash);
+                            builder.add(transactionReceipt::getBlockNumber);
+                            this.suppliers = builder.build();
+                            return true;
                         }
                         data = "0x" + dataFields.next();
                     }
